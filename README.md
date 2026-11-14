@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ORBITe 3 — introduction cinématique
 
-## Getting Started
+Introduction 3D temps réel (Three.js) : la Terre, le départ du vaisseau, le transit, l'approche de Mars et l'atterrissage. Le gameplay reprend ensuite sur `/play`.
 
-First, run the development server:
+## Lancer
 
 ```bash
-npm run dev
-# or
+yarn
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000), puis **Lancer la mission**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Espace** ou **Passer** interrompt l'introduction et enchaîne sur la scène jouable.
+- **Mode Cadet** sur l'accueil va directement au jeu.
+- `http://localhost:3000/intro?speed=8` accélère le montage.
+- `http://localhost:3000/intro?t=55` saute à un instant (secondes).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Modèles
 
-## Learn More
+Les fichiers sont dans `public/models/`. Les chemins se changent dans `src/assets.js` :
 
-To learn more about Next.js, take a look at the following resources:
+| Rôle | Fichier utilisé |
+| --- | --- |
+| Terre + nuages | `earth (2).glb` |
+| Mars | `mars (2).glb` |
+| Astronaute (`idle`, `wave`, `moon_walk`) | `astronaut.glb` |
+| Vaisseau | lander procédural (`spaceship: null`) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Pour un vaisseau GLB : nez vers +Z, ventre vers le bas, puis `spaceship: "/models/mon-vaisseau.glb"`. S'il ne charge pas, le lander de remplacement reste affiché.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`astronautFacing` règle la direction de sortie si un autre astronaute ne regarde pas le sas.
 
-## Deploy on Vercel
+Les GLB Mars et astronaute utilisent l'extension `KHR_materials_pbrSpecularGlossiness`, retirée de Three.js. Le chargeur la convertit à la volée vers un matériau PBR standard.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+yarn dev
+yarn build
+yarn start
+```

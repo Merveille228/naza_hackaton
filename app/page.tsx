@@ -32,7 +32,7 @@ export default function Home() {
 
         <div className="animate-rise-delay-3 mt-10 flex flex-wrap items-center gap-4">
           <Link
-            href="/play"
+            href="/intro"
             className="inline-flex items-center justify-center bg-nasa-red px-7 py-3.5 font-display text-sm font-semibold tracking-wide text-white uppercase transition-colors hover:bg-[#ff5340]"
             style={{ animation: "pulse-cta 2.4s ease-in-out infinite" }}
           >
