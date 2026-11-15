@@ -9,7 +9,6 @@ import {
   SRGBColorSpace,
 } from "three";
 import { ASSETS, LOOK } from "../assets.js";
-import { createAtmosphere, setAtmosphereFade, updateAtmosphere } from "../effects/Atmosphere.js";
 import { loadModel } from "./loadModel.js";
 import { fitToRadius, prepareMeshes, stripUtilityNodes } from "./gltfTools.js";
 
@@ -172,8 +171,6 @@ export class Earth {
       this.model.add(mesh);
     }
 
-    this.atmosphere = createAtmosphere(this.radius * 1.065, "#7eb6ff", 0.95, 3.15);
-    this.group.add(this.atmosphere);
     this._buildMoon();
     this.setFade(0);
   }
@@ -208,17 +205,15 @@ export class Earth {
         material.depthWrite = !cloud && fade >= 0.98;
       });
     });
-    setAtmosphereFade(this.atmosphere, fade);
     if (this.moon) this.moon.visible = fade > 0.35;
   }
 
-  update(dt, camera) {
+  update(dt) {
     this.model.rotation.y += dt * 0.018;
     this.clouds.forEach((cloud) => {
       cloud.rotation.y += dt * 0.012;
     });
     if (this.moon) this.moon.rotation.y += dt * 0.01;
     this.mixer?.update(dt);
-    updateAtmosphere(this.atmosphere, camera);
   }
 }

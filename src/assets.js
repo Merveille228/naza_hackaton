@@ -13,6 +13,7 @@ export const ASSETS = {
   mars: "/models/mars%20(2).glb",
   astronaut: "/models/astronaut.glb",
   spaceship: null,
+  rock: "/models/eroded_desert_rock.glb",
   astronautFacing: Math.PI / 2,
 };
 

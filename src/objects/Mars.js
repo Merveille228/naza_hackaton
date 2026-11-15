@@ -5,18 +5,18 @@ import {
   FogExp2,
   Group,
   Mesh,
-  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   RepeatWrapping,
   ShaderMaterial,
   SphereGeometry,
   SRGBColorSpace,
+  TextureLoader,
+  Vector2,
 } from "three";
 import { ASSETS, LOOK } from "../assets.js";
-import { createAtmosphere, setAtmosphereFade, updateAtmosphere } from "../effects/Atmosphere.js";
 import { loadModel } from "./loadModel.js";
-import { fitToRadius, prepareMeshes, stripUtilityNodes } from "./gltfTools.js";
+import { fitToHeight, fitToRadius, prepareMeshes, stripUtilityNodes } from "./gltfTools.js";
 
 function hash(x, y) {
   const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
@@ -74,6 +74,35 @@ function paintMars() {
   return texture;
 }
 
+function loadRepeatTexture(url, colorSpace) {
+  const loader = new TextureLoader();
+  return new Promise((resolve) => {
+    loader.load(
+      url,
+      (texture) => {
+        texture.wrapS = RepeatWrapping;
+        texture.wrapT = RepeatWrapping;
+        texture.repeat.set(26, 26);
+        if (colorSpace) texture.colorSpace = SRGBColorSpace;
+        resolve(texture);
+      },
+      undefined,
+      () => resolve(null),
+    );
+  });
+}
+
+async function loadRockTextures() {
+  const base = "/textures/rock029/Rock029_1K-JPG_";
+  const [map, normalMap, roughnessMap, aoMap] = await Promise.all([
+    loadRepeatTexture(`${base}Color.jpg`, true),
+    loadRepeatTexture(`${base}NormalGL.jpg`, false),
+    loadRepeatTexture(`${base}Roughness.jpg`, false),
+    loadRepeatTexture(`${base}AmbientOcclusion.jpg`, false),
+  ]);
+  return { map, normalMap, roughnessMap, aoMap };
+}
+
 function smoothstep(edge0, edge1, value) {
   const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
@@ -100,7 +129,7 @@ export class Mars {
   async load(renderer, hooks, quality) {
     this.scene.add(this.planetGroup);
     this.scene.add(this.surfaceGroup);
-    this.planetGroup.position.set(90, 40, 1980);
+    this.planetGroup.position.set(0, 0, 0);
 
     try {
       const gltf = await loadModel(ASSETS.mars, hooks);
@@ -110,12 +139,21 @@ export class Mars {
       prepareMeshes(this.model, renderer);
       this.model.traverse((obj) => {
         if (!obj.isMesh || !obj.material) return;
-        const material = Array.isArray(obj.material) ? obj.material[0] : obj.material;
-        if (material.map && !this.albedo) this.albedo = material.map;
-        material.roughness = 0.92;
-        material.metalness = 0.02;
-        material.emissive = new Color("#000000");
-        material.emissiveIntensity = 0;
+        obj.frustumCulled = false;
+        const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+        materials.forEach((material) => {
+          if (!material) return;
+          if (material.map && !this.albedo) this.albedo = material.map;
+          material.color.set("#ffffff");
+          material.roughness = 0.92;
+          material.metalness = 0.02;
+          material.emissive = new Color("#000000");
+          material.emissiveIntensity = 0;
+          material.transparent = false;
+          material.opacity = 1;
+          material.depthWrite = true;
+          material.alphaTest = 0;
+        });
       });
       fitToRadius(this.model, this.radius);
     } catch (error) {
@@ -134,8 +172,15 @@ export class Mars {
       this.model.add(mesh);
     }
 
-    this.atmosphere = createAtmosphere(this.radius * 1.045, "#e7a07a", 0.62, 2.5);
-    this.planetGroup.add(this.atmosphere);
+    this.rockTextures = await loadRockTextures();
+    try {
+      const rockGltf = await loadModel(ASSETS.rock, { isAlive: hooks.isAlive });
+      this.rockTemplate = rockGltf?.scene || null;
+      if (this.rockTemplate) prepareMeshes(this.rockTemplate, renderer);
+    } catch (error) {
+      console.warn("Rocher indisponible.", error);
+      this.rockTemplate = null;
+    }
     this._buildSurface(quality);
     this.setFade(0);
   }
@@ -158,23 +203,20 @@ export class Mars {
     }
     geometry.computeVertexNormals();
 
-    let map = null;
-    if (this.albedo) {
-      map = this.albedo.clone();
-      map.wrapS = RepeatWrapping;
-      map.wrapT = RepeatWrapping;
-      map.repeat.set(0.18, 0.18);
-      map.offset.set(0.38, 0.52);
-      map.needsUpdate = true;
-    }
-
+    geometry.setAttribute("uv2", geometry.getAttribute("uv"));
+    const rock = this.rockTextures;
     const terrain = new Mesh(
       geometry,
       new MeshStandardMaterial({
-        map,
-        color: map ? "#ffffff" : "#b85a38",
-        roughness: 0.97,
-        metalness: 0.02,
+        map: rock?.map || null,
+        normalMap: rock?.normalMap || null,
+        roughnessMap: rock?.roughnessMap || null,
+        aoMap: rock?.aoMap || null,
+        color: "#ffffff",
+        roughness: rock?.roughnessMap ? 1 : 0.96,
+        metalness: 0,
+        aoMapIntensity: 0.8,
+        normalScale: new Vector2(1.5, 1.5),
       }),
     );
     terrain.name = "Terrain";
@@ -185,31 +227,24 @@ export class Mars {
     sky.renderOrder = -2;
     this.surfaceGroup.add(sky);
 
-    const rockMat = new MeshStandardMaterial({
-      color: "#a85b3c",
-      map,
-      roughness: 1,
-      metalness: 0,
-    });
-    const rockCount = quality === "low" ? 5 : 9;
-    for (let i = 0; i < rockCount; i += 1) {
-      const rock = new Mesh(new SphereGeometry(1, 6, 5), rockMat);
-      const angle = (i / rockCount) * Math.PI * 2 + 0.4;
-      const dist = 18 + (i % 4) * 16;
-      const scale = 0.6 + (i % 3) * 0.7;
-      rock.scale.set(scale * 1.8, scale * 0.7, scale * 1.3);
-      rock.position.set(Math.cos(angle) * dist, scale * 0.2, Math.sin(angle) * dist);
-      rock.rotation.y = angle;
-      this.surfaceGroup.add(rock);
+    if (this.rockTemplate) {
+      const spots = [
+        [5.4, 2.6, 0.7],
+        [-6.2, 3.4, 1.1],
+        [3.2, -6.8, 0.55],
+        [-4.8, -5.2, 1.4],
+        [8.6, -1.4, 0.9],
+        [-8.2, -1.1, 0.4],
+      ];
+      spots.forEach(([x, z, height], index) => {
+        const pebble = this.rockTemplate.clone(true);
+        fitToHeight(pebble, height);
+        pebble.position.set(x, 0, z);
+        pebble.rotation.y = index * 1.17;
+        this.surfaceGroup.add(pebble);
+      });
     }
 
-    const pad = new Mesh(
-      new SphereGeometry(1, 20, 12),
-      new MeshStandardMaterial({ color: "#8d4a32", roughness: 1, metalness: 0 }),
-    );
-    pad.scale.set(7.5, 0.08, 7.5);
-    pad.position.y = 0.02;
-    this.surfaceGroup.add(pad);
   }
 
   _skyMaterial() {
@@ -257,7 +292,6 @@ export class Mars {
         material.depthWrite = fade >= 0.98;
       });
     });
-    setAtmosphereFade(this.atmosphere, fade);
   }
 
   showSurface(show) {
@@ -265,8 +299,7 @@ export class Mars {
     this.planetGroup.visible = !show;
   }
 
-  update(dt, camera) {
+  update(dt) {
     if (!this.surfaceGroup.visible) this.model.rotation.y += dt * 0.01;
-    updateAtmosphere(this.atmosphere, camera);
   }
 }

@@ -30,7 +30,7 @@ export class SceneManager {
     this.quality = detectQuality();
     this.scene = new Scene();
     this.scene.background = new Color("#020308");
-    this.scene.environmentIntensity = 0.32;
+    this.scene.environmentIntensity = 0.16;
 
     this.camera = new PerspectiveCamera(42, 1, 0.35, 8000);
     this.renderer = new WebGLRenderer({
@@ -41,7 +41,7 @@ export class SceneManager {
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 0.9;
     this.renderer.shadowMap.enabled = false;
     this.renderer.shadowMap.type = PCFSoftShadowMap;
     this.renderer.setClearColor(0x020308, 1);
@@ -64,7 +64,7 @@ export class SceneManager {
       const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType });
       this.composer = new EffectComposer(this.renderer, target);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloom = new UnrealBloomPass(size, 0.09, 0.38, 0.94);
+      this.bloom = new UnrealBloomPass(size, 0.035, 0.3, 0.98);
       this.composer.addPass(this.bloom);
       this.composer.addPass(new OutputPass());
     }
@@ -97,7 +97,7 @@ export class SceneManager {
     this.camera.near = 0.35;
     this.camera.far = 8000;
     this.camera.updateProjectionMatrix();
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 0.9;
   }
 
   setSurfaceBackground(fog) {
@@ -106,7 +106,7 @@ export class SceneManager {
     this.camera.near = 0.05;
     this.camera.far = 1600;
     this.camera.updateProjectionMatrix();
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.0;
   }
 
   render() {

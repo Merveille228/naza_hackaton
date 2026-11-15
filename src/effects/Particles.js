@@ -16,13 +16,9 @@ import gsap from "gsap";
 export class Particles {
   constructor(scene, quality) {
     this.scene = scene;
-    const motes = quality === "low" ? 70 : 140;
-    const dustCount = quality === "low" ? 140 : 240;
+    const dustCount = quality === "low" ? 90 : 160;
 
     this.sprite = Particles.circleTexture();
-    this.motes = this._makePoints(motes, 0.22, "#d5e2ff", 0.45);
-    scene.add(this.motes.points);
-
     this.dust = this._makeDust(dustCount);
     scene.add(this.dust.points);
 
@@ -73,7 +69,7 @@ export class Particles {
     geometry.setAttribute("position", new BufferAttribute(positions, 3));
     const material = new PointsMaterial({
       color: "#e7b08a",
-      size: 0.55,
+      size: 0.16,
       map: this.sprite,
       transparent: true,
       opacity: 0.0,
@@ -86,23 +82,7 @@ export class Particles {
     return { points, geometry, positions, velocities, life, count };
   }
 
-  update(dt, camera) {
-    const motePos = this.motes.geometry.attributes.position;
-    const array = motePos.array;
-    for (let i = 0; i < array.length; i += 3) {
-      array[i + 2] -= dt * 0.6;
-      const dx = array[i] - camera.position.x;
-      const dy = array[i + 1] - camera.position.y;
-      const dz = array[i + 2] - camera.position.z;
-      if (dx > 35) array[i] -= 70;
-      if (dx < -35) array[i] += 70;
-      if (dy > 20) array[i + 1] -= 40;
-      if (dy < -20) array[i + 1] += 40;
-      if (dz > 35) array[i + 2] -= 70;
-      if (dz < -35) array[i + 2] += 70;
-    }
-    motePos.needsUpdate = true;
-
+  update(dt) {
     if (!this.dust.points.visible) return;
     const { positions, velocities, life, count } = this.dust;
     let alive = 0;
@@ -126,9 +106,7 @@ export class Particles {
     if (alive === 0) this.dust.points.visible = false;
   }
 
-  setSpaceDustVisible(visible) {
-    this.motes.points.visible = visible;
-  }
+  setSpaceDustVisible() {}
 
   spawnDust(origin, amount, upward) {
     const { positions, velocities, life, count } = this.dust;

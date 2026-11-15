@@ -53,6 +53,11 @@ export function prepareMeshes(root, renderer) {
   });
 }
 
+function toParentSpace(object, point) {
+  if (object.parent) object.parent.worldToLocal(point);
+  return point;
+}
+
 export function fitToRadius(object, radius) {
   object.updateWorldMatrix(true, true);
   box.setFromObject(object);
@@ -63,6 +68,7 @@ export function fitToRadius(object, radius) {
   object.updateWorldMatrix(true, true);
   box.setFromObject(object);
   box.getCenter(center);
+  toParentSpace(object, center);
   object.position.sub(center);
   object.updateWorldMatrix(true, true);
   return radius;

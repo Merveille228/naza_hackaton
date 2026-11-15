@@ -24,8 +24,7 @@ export function IntroExperience() {
       .catch((error: unknown) => {
         console.error(error);
         if (!host.current) return;
-        const message = error instanceof Error ? error.stack || error.message : String(error);
-        host.current.textContent = message;
+        host.current.textContent = error instanceof Error ? error.message : String(error);
       });
 
     return () => {

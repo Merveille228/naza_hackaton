@@ -1,5 +1,6 @@
 import {
   AdditiveBlending,
+  Box3,
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
@@ -17,13 +18,18 @@ import {
   SphereGeometry,
   SRGBColorSpace,
 } from "three";
-import gsap from "gsap";
 import { ASSETS, LOOK } from "../assets.js";
 import { loadModel } from "./loadModel.js";
 import { fitToLength, prepareMeshes, stripUtilityNodes } from "./gltfTools.js";
 
 function metal(color, roughness, metalness, extras = {}) {
-  return new MeshStandardMaterial({ color, roughness, metalness, ...extras });
+  return new MeshStandardMaterial({
+    color,
+    roughness,
+    metalness,
+    envMapIntensity: 0.12,
+    ...extras,
+  });
 }
 
 function shadowTexture() {
@@ -52,6 +58,8 @@ export class Spaceship {
     this.embers = null;
     this.emberPositions = null;
     this.emberBase = -2.7;
+    this.tailZ = -2.7;
+    this.plumeY = 1.05;
     this.engineLight = null;
     this.noseGlow = null;
     this.nav = [];
@@ -70,8 +78,20 @@ export class Spaceship {
           const holder = new Group();
           holder.add(gltf.scene);
           prepareMeshes(holder, renderer);
+          holder.traverse((obj) => {
+            if (!obj.isMesh) return;
+            const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+            materials.forEach((material) => {
+              if (!material) return;
+              material.envMapIntensity = 0.12;
+              if (material.emissive) material.emissiveIntensity = Math.min(material.emissiveIntensity || 0, 0.12);
+            });
+          });
           fitToLength(holder, LOOK.shipLength);
           this.group.add(holder);
+          const bounds = new Box3().setFromObject(holder);
+          this.tailZ = bounds.min.z;
+          this.plumeY = (bounds.min.y + bounds.max.y) * 0.5;
           this.usingFallback = false;
         }
       } catch (error) {
@@ -89,13 +109,13 @@ export class Spaceship {
   }
 
   _buildProcedural() {
-    const white = metal("#c9d0da", 0.58, 0.22);
-    const panel = metal("#2c3442", 0.4, 0.62);
-    const foil = metal("#a78455", 0.32, 0.78);
-    const dark = metal("#14181f", 0.38, 0.84);
-    const solar = metal("#10284a", 0.28, 0.55, {
-      emissive: "#1c4f96",
-      emissiveIntensity: 0.45,
+    const white = metal("#b7c0cc", 0.84, 0.04);
+    const panel = metal("#3a4250", 0.72, 0.18);
+    const foil = metal("#8d734c", 0.62, 0.22);
+    const dark = metal("#1c2128", 0.7, 0.28);
+    const solar = metal("#163056", 0.55, 0.12, {
+      emissive: "#0d2a55",
+      emissiveIntensity: 0.08,
       side: DoubleSide,
     });
 
@@ -111,7 +131,7 @@ export class Spaceship {
 
     const cockpit = new Mesh(
       new SphereGeometry(0.46, 20, 16),
-      metal("#07131d", 0.08, 0.2, { emissive: "#14324a", emissiveIntensity: 0.35 }),
+      metal("#0c1822", 0.35, 0.08, { emissive: "#102433", emissiveIntensity: 0.06 }),
     );
     cockpit.scale.set(1.15, 0.72, 1);
     cockpit.position.set(0, 2.05, 2.35);
@@ -195,8 +215,8 @@ export class Spaceship {
     stripe.position.set(0.55, 2.28, 0.2);
     this._add(stripe);
 
-    this.nav.push(this._navLight(1.2, 1.7, 1.6, "#ff3b30"));
-    this.nav.push(this._navLight(-1.2, 1.7, 1.6, "#3ddc6a"));
+    this.nav.push(this._navLight(4.15, 2.35, -1.2, "#ff3b30"));
+    this.nav.push(this._navLight(-4.15, 2.35, -1.2, "#3ddc6a"));
 
     this.noseGlow = new Mesh(
       new SphereGeometry(1.08, 24, 16),
@@ -214,7 +234,7 @@ export class Spaceship {
   }
 
   _navLight(x, y, z, color) {
-    const mesh = new Mesh(new SphereGeometry(0.06, 10, 10), new MeshBasicMaterial({ color }));
+    const mesh = new Mesh(new SphereGeometry(0.035, 10, 10), new MeshBasicMaterial({ color }));
     mesh.position.set(x, y, z);
     this.group.add(mesh);
     return mesh;
@@ -232,20 +252,21 @@ export class Spaceship {
     const coreMat = plumeMat.clone();
     coreMat.color.set("#fff4dd");
 
-    const rear = this.usingFallback ? -2.7 : -LOOK.shipLength * 0.48;
-    const height = this.usingFallback ? 1.05 : 1.2;
-    [-0.42, 0.42].forEach((x) => {
-      const plume = new Mesh(new ConeGeometry(0.38, 2.8, 16, 1, true), plumeMat.clone());
-      plume.rotation.x = Math.PI / 2;
-      plume.position.set(this.usingFallback ? x : x * 0.35, height, rear - 1.2);
+    const rear = this.tailZ;
+    const height = this.plumeY;
+    const nozzles = this.usingFallback ? [-0.42, 0.42] : [-0.72, 0, 0.72];
+    nozzles.forEach((x) => {
+      const plume = new Mesh(new ConeGeometry(0.22, 1.8, 12, 1, true), plumeMat.clone());
+      plume.rotation.x = -Math.PI / 2;
+      plume.position.set(x, height, rear - 0.35);
       const core = new Mesh(new ConeGeometry(0.16, 1.6, 12, 1, true), coreMat.clone());
-      core.rotation.x = Math.PI / 2;
+      core.rotation.x = -Math.PI / 2;
       core.position.copy(plume.position);
       this.group.add(plume, core);
       this.plumes.push(plume, core);
     });
 
-    this.engineLight = new PointLight("#ffb060", 0, 16, 2);
+    this.engineLight = new PointLight("#ffb060", 0, 7, 2);
     this.engineLight.position.set(0, height, rear);
     this.group.add(this.engineLight);
 
@@ -294,8 +315,6 @@ export class Spaceship {
 
   reveal() {
     this.group.visible = true;
-    this.group.scale.setScalar(0.94);
-    gsap.to(this.group.scale, { x: 1, y: 1, z: 1, duration: 1.5, ease: "power2.out" });
   }
 
   update(dt) {
@@ -308,10 +327,10 @@ export class Spaceship {
       const width = 0.4 + power * (outer ? 0.85 : 0.45);
       const length = (0.25 + power * (outer ? 1.35 : 0.9)) * flicker;
       plume.scale.set(width, length, width);
-      plume.material.opacity = power * (outer ? 0.45 : 0.9);
+      plume.material.opacity = power * (outer ? 0.28 : 0.55);
       plume.visible = power > 0.02;
     });
-    if (this.engineLight) this.engineLight.intensity = power * 8 * flicker;
+    if (this.engineLight) this.engineLight.intensity = power * 1.4 * flicker;
 
     if (this.embers) {
       this.embers.visible = power > 0.05 || this.params.heat > 0.2;

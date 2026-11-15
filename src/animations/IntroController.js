@@ -1,4 +1,4 @@
-import { CatmullRomCurve3, Matrix4, Quaternion, Vector3 } from "three";
+import { Vector3 } from "three";
 import gsap from "gsap";
 import { Earth } from "../objects/Earth.js";
 import { Mars } from "../objects/Mars.js";
@@ -27,38 +27,22 @@ export class IntroController {
     this.particles = new Particles(scene, quality);
 
     this.cam = cameraManager.state;
-    this.follow = { x: 0, y: 4, z: 16, lx: 0, ly: 1.4, lz: -4 };
-    this.flight = { t: 0 };
-    this.descent = { t: 0 };
-    this.surfaceAlt = { y: 42 };
+    this.pose = { x: 0, y: 5.2, z: 40, s: 0.08 };
+    this.rig = { swing: 0, yaw: 1 };
+    this.swingFrom = { x: 0, y: 10, z: 80 };
+    this.black = { v: 0 };
+    this.camLock = "free";
+    this.surfaceAlt = { y: 5 };
     this.earthFade = { v: 0 };
     this.marsFade = { v: 0 };
-    this.mode = "manual";
     this.phase = "space";
-    this.snapCamera = false;
-    this.oriented = false;
     this.landed = false;
     this.ready = false;
     this.alive = true;
     this.done = false;
     this.tl = null;
 
-    this.orbitPoint = new Vector3();
-    this.curve = null;
-    this.approach = new Vector3();
-    this.entry = new Vector3();
-
-    this._camLocal = new Vector3();
-    this._lookLocal = new Vector3();
-    this._smoothCam = new Vector3();
-    this._smoothLook = new Vector3();
-    this._tangent = new Vector3();
-    this._x = new Vector3();
-    this._y = new Vector3();
-    this._up = new Vector3(0, 1, 0);
-    this._basis = new Matrix4();
-    this._desired = new Quaternion();
-    this._dustOrigin = new Vector3(0, 0.15, -0.4);
+    this._dustOrigin = new Vector3(0, 0.25, -1.6);
   }
 
   async preload(onProgress) {
@@ -93,39 +77,32 @@ export class IntroController {
 
     this.ship.group.add(this.astronaut.group);
     this.astronaut.group.position.set(0.28, 0, 0.2);
+    this.astronaut.group.visible = false;
     this._buildRoute();
-    this._placeShip(this.curve.getPoint(0), this.curve.getTangent(0), 1);
-    this.oriented = true;
+    this.ship.group.position.set(this.pose.x, this.pose.y, this.pose.z);
+    this.ship.group.scale.setScalar(this.pose.s);
+    this.ship.group.quaternion.identity();
     this.ready = true;
     report("ship", 1);
     return true;
   }
 
   _buildRoute() {
-    const outward = new Vector3(-0.12, 0.34, -1).normalize();
-    const orbit = new Vector3(this.earth.radius * 0.22, this.earth.radius * 0.16, this.earth.radius + 18);
-    const leave = orbit.clone().add(new Vector3(28, 16, 150));
-    const mid = new Vector3(120, 64, 780);
-    const far = this.mars.center.clone().addScaledVector(outward, this.mars.radius + 620);
-    const approach = this.mars.center.clone().addScaledVector(outward, this.mars.radius + 160);
-
-    this.orbitPoint.copy(orbit);
-    this.curve = new CatmullRomCurve3([orbit, leave, mid, far, approach], false, "centripetal", 0.22);
-    this.approach.copy(this.curve.getPoint(1));
-    const away = this.approach.clone().sub(this.mars.center).normalize();
-    this.entry.copy(this.mars.center).addScaledVector(away, this.mars.radius * 1.075);
+    const er = this.earth.radius;
+    this.pose.z = er + 2;
+    this.mars.planetGroup.position.set(0, 0, 720);
   }
 
   play() {
     const er = this.earth.radius;
     Object.assign(this.cam, {
-      x: er * 1.1,
-      y: er * 0.72,
-      z: er * 7.6,
+      x: er * 0.2,
+      y: er * 0.46,
+      z: er * 3.15,
       lx: 0,
-      ly: 0,
+      ly: er * 0.04,
       lz: 0,
-      fov: 46,
+      fov: 42,
     });
     this.stars.setResolution(window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
     this.tl = buildIntroTimeline(this);
@@ -141,13 +118,23 @@ export class IntroController {
     this.ship.reveal();
   }
 
-  setMode(mode, snap = false) {
-    this.mode = mode;
-    this.snapCamera = snap;
-    if (mode === "follow") {
-      this._smoothCam.set(this.cam.x, this.cam.y, this.cam.z);
-      this._smoothLook.set(this.cam.lx, this.cam.ly, this.cam.lz);
-    }
+  setCamLock(lock) {
+    this.camLock = lock;
+  }
+
+  startSwing() {
+    this.swingFrom.x = this.cam.x;
+    this.swingFrom.y = this.cam.y;
+    this.swingFrom.z = this.cam.z;
+    this.rig.swing = 0;
+    this.rig.yaw = 1;
+    this.camLock = "swing";
+    this.revealMars();
+  }
+
+  revealMars() {
+    this.marsFade.v = 1;
+    this.mars.setFade(1);
   }
 
   cutToSurface() {
@@ -160,19 +147,20 @@ export class IntroController {
     this.particles.setSpaceDustVisible(false);
     this.lighting.setSurface(1);
     this.ship.group.visible = true;
-    this.ship.group.position.set(0, this.surfaceAlt.y, 0);
-    this.ship.group.quaternion.identity();
-    this.setMode("follow", true);
+    this.astronaut.group.visible = false;
+    this.camLock = "free";
+    this._placeOnSurface();
   }
 
   beginEgress() {
     this.astronaut.group.visible = true;
+    this.astronaut.group.position.set(1.05, 0, 0.15);
     const walk = this.astronaut.actions?.size ? "moon_walk" : "idle";
     this.astronaut.play(walk);
     gsap.to(this.astronaut.group.position, {
-      x: 2.55,
+      x: 4.2,
       y: 0,
-      z: 0.32,
+      z: 0.9,
       duration: 4.3,
       ease: "power1.inOut",
       onComplete: () => {
@@ -198,19 +186,34 @@ export class IntroController {
     if (!this.ready) return;
 
     if (this.phase === "space") {
-      const descending = this.descent.t > 0.001;
-      const position = descending
-        ? this.approach.clone().lerp(this.entry, this._ease(this.descent.t))
-        : this.curve.getPoint(Math.min(this.flight.t, 0.9999));
-      const tangent = descending
-        ? this.entry.clone().sub(this.approach)
-        : this.curve.getTangent(Math.min(this.flight.t, 0.9999));
-      this._placeShip(position, tangent, dt);
-    } else {
-      this.ship.group.position.set(0, Math.max(0, this.surfaceAlt.y), 0);
+      this.ship.group.position.set(this.pose.x, this.pose.y, this.pose.z);
+      this.ship.group.scale.setScalar(Math.max(0.04, this.pose.s));
       this.ship.group.quaternion.identity();
-      this._dustOrigin.set(0, 0.2, -0.2);
-      if (this.surfaceAlt.y < 16 && this.ship.params.engine > 0.12) {
+      if (this.camLock === "swing" || this.camLock === "fly") this.revealMars();
+      if (this.camLock === "swing") {
+        const t = this.rig.swing;
+        this.cam.x = this.swingFrom.x + (this.pose.x + 24 - this.swingFrom.x) * t;
+        this.cam.y = this.swingFrom.y + (this.pose.y + 3.4 - this.swingFrom.y) * t;
+        this.cam.z = this.swingFrom.z + (this.pose.z - this.swingFrom.z) * t;
+        this.cam.lx = this.pose.x;
+        this.cam.ly = this.pose.y;
+        this.cam.lz = this.pose.z;
+      } else if (this.camLock === "fly") {
+        const yaw = this.rig.yaw;
+        const side = Math.sin(yaw * Math.PI * 0.5);
+        const back = Math.cos(yaw * Math.PI * 0.5);
+        this.cam.x = this.pose.x + side * 24;
+        this.cam.y = this.pose.y + 3.4;
+        this.cam.z = this.pose.z - back * 18;
+        const mars = this.mars.planetGroup.position;
+        this.cam.lx = this.pose.x * yaw + mars.x * (1 - yaw);
+        this.cam.ly = this.pose.y * yaw + mars.y * (1 - yaw);
+        this.cam.lz = this.pose.z * yaw + mars.z * (1 - yaw);
+      }
+    } else {
+      this._placeOnSurface();
+      this._dustOrigin.set(0, 0.25, -1.6);
+      if (!this.landed && this.surfaceAlt.y < 16 && this.surfaceAlt.y > 0.15 && this.ship.params.engine > 0.12) {
         this.particles.spawnDust(this._dustOrigin, 2, 0.8 + this.ship.params.engine * 1.4);
       }
       if (!this.landed && this.surfaceAlt.y <= 0.05) {
@@ -219,8 +222,6 @@ export class IntroController {
         this.cameraManager.addShake(0.28);
       }
     }
-
-    if (this.mode === "follow") this._applyFollow(dt);
 
     this.ship.update(dt);
     this.earth.update(dt, this.camera);
@@ -232,42 +233,10 @@ export class IntroController {
     this.stars.setResolution(window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
   }
 
-  _placeShip(position, tangent, dt) {
-    this.ship.group.position.copy(position);
-    this._tangent.copy(tangent);
-    if (this._tangent.lengthSq() < 1e-6) return;
-    this._tangent.normalize();
-    this._x.crossVectors(this._up, this._tangent);
-    if (this._x.lengthSq() < 1e-6) this._x.set(1, 0, 0);
-    this._x.normalize();
-    this._y.crossVectors(this._tangent, this._x).normalize();
-    this._basis.makeBasis(this._x, this._y, this._tangent);
-    this._desired.setFromRotationMatrix(this._basis);
-    const alpha = this.oriented ? 1 - Math.exp(-1.5 * dt) : 1;
-    this.ship.group.quaternion.slerp(this._desired, alpha);
-    this.oriented = true;
-  }
-
-  _applyFollow(dt) {
-    const quaternion = this.ship.group.quaternion;
-    const origin = this.ship.group.position;
-    this._camLocal.set(this.follow.x, this.follow.y, this.follow.z).applyQuaternion(quaternion).add(origin);
-    this._lookLocal.set(this.follow.lx, this.follow.ly, this.follow.lz).applyQuaternion(quaternion).add(origin);
-    const alpha = this.snapCamera ? 1 : 1 - Math.exp(-1.35 * dt);
-    this._smoothCam.lerp(this._camLocal, alpha);
-    this._smoothLook.lerp(this._lookLocal, alpha);
-    this.snapCamera = false;
-    this.cam.x = this._smoothCam.x;
-    this.cam.y = this._smoothCam.y;
-    this.cam.z = this._smoothCam.z;
-    this.cam.lx = this._smoothLook.x;
-    this.cam.ly = this._smoothLook.y;
-    this.cam.lz = this._smoothLook.z;
-  }
-
-  _ease(value) {
-    const t = Math.min(1, Math.max(0, value));
-    return t * t * (3 - 2 * t);
+  _placeOnSurface() {
+    this.ship.group.quaternion.identity();
+    this.ship.group.scale.setScalar(1);
+    this.ship.group.position.set(0, Math.max(0, this.surfaceAlt.y), 0);
   }
 
   dispose() {

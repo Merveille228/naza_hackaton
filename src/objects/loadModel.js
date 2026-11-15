@@ -1,3 +1,4 @@
+import { LoadingManager, SRGBColorSpace, Texture } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const SPEC_GLOSS = "KHR_materials_pbrSpecularGlossiness";
@@ -75,6 +76,24 @@ export function patchSpecularGlossiness(arrayBuffer) {
   return out.buffer;
 }
 
+let bitmapSuspensions = 0;
+let savedCreateImageBitmap;
+
+function suspendImageBitmap() {
+  if (bitmapSuspensions === 0 && typeof globalThis.createImageBitmap === "function") {
+    savedCreateImageBitmap = globalThis.createImageBitmap;
+    globalThis.createImageBitmap = undefined;
+  }
+  bitmapSuspensions += 1;
+  return () => {
+    bitmapSuspensions -= 1;
+    if (bitmapSuspensions === 0 && savedCreateImageBitmap) {
+      globalThis.createImageBitmap = savedCreateImageBitmap;
+      savedCreateImageBitmap = undefined;
+    }
+  };
+}
+
 export async function loadModel(url, { onProgress, isAlive } = {}) {
   onProgress?.(0.01);
   const response = await fetch(url);
@@ -111,6 +130,87 @@ export async function loadModel(url, { onProgress, isAlive } = {}) {
   onProgress?.(1);
 
   const patched = patchSpecularGlossiness(bytes.buffer);
-  const loader = new GLTFLoader();
-  return loader.parseAsync(patched, "");
+  const loader = new GLTFLoader(new LoadingManager());
+  // ImageBitmapLoader échoue sur certains JPEG embarqués et laisse la planète sans texture.
+  const resume = suspendImageBitmap();
+  let gltf;
+  try {
+    gltf = await loader.parseAsync(patched, "");
+  } finally {
+    resume();
+  }
+  await applyEmbeddedAlbedo(gltf, patched);
+  return gltf;
+}
+
+function glbImages(arrayBuffer) {
+  const src = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 20 || view.getUint32(0, true) !== 0x46546c67) return [];
+  const jsonLength = view.getUint32(12, true);
+  let json;
+  try {
+    json = JSON.parse(new TextDecoder().decode(src.subarray(20, 20 + jsonLength)));
+  } catch {
+    return [];
+  }
+  const binHeader = 20 + jsonLength;
+  if (binHeader + 8 > src.length || view.getUint32(binHeader + 4, true) !== 0x004e4942) return [];
+  const bodyStart = binHeader + 8;
+  return (json.images || []).map((image) => {
+    if (image.bufferView === undefined) return null;
+    const bufferView = json.bufferViews?.[image.bufferView];
+    if (!bufferView) return null;
+    const start = bodyStart + (bufferView.byteOffset || 0);
+    return {
+      mime: image.mimeType || "image/jpeg",
+      bytes: src.slice(start, start + bufferView.byteLength),
+    };
+  });
+}
+
+function decodeImage({ bytes, mime }) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Texture embarquée illisible"));
+    };
+    image.src = url;
+  });
+}
+
+async function applyEmbeddedAlbedo(gltf, arrayBuffer) {
+  const images = glbImages(arrayBuffer).filter(Boolean);
+  if (images.length !== 1 || !gltf?.scene) return;
+
+  let missing = false;
+  gltf.scene.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+    if (materials.some((material) => material && !material.map?.image?.width)) missing = true;
+  });
+  if (!missing) return;
+
+  const image = await decodeImage(images[0]);
+  const texture = new Texture(image);
+  texture.flipY = false;
+  texture.colorSpace = SRGBColorSpace;
+  texture.needsUpdate = true;
+
+  gltf.scene.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+    materials.forEach((material) => {
+      if (!material || material.map?.image?.width) return;
+      material.map = texture;
+      material.color?.set?.("#ffffff");
+      material.needsUpdate = true;
+    });
+  });
 }

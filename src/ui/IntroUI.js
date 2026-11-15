@@ -55,6 +55,11 @@ export class IntroUI {
     this.heat.style.opacity = String(Math.max(0, Math.min(1, value)));
   }
 
+  setFade(value) {
+    this.fade.style.transition = "none";
+    this.fade.style.opacity = String(Math.max(0, Math.min(1, value)));
+  }
+
   showFinale() {
     this.titles.classList.add("is-on");
   }

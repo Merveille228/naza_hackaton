@@ -1,14 +1,18 @@
 import { AmbientLight, Color, DirectionalLight, HemisphereLight, Mesh, MeshBasicMaterial, SphereGeometry } from "three";
 
 export function createLighting(scene) {
-  const sunPosition = { x: -2400, y: 980, z: -720 };
+  const sunPosition = { x: 900, y: 1600, z: 700 };
 
-  const sun = new DirectionalLight("#fff3e4", 2.55);
+  const sun = new DirectionalLight("#fff6ee", 2.8);
   sun.position.set(sunPosition.x, sunPosition.y, sunPosition.z);
   sun.castShadow = false;
 
-  const ambient = new AmbientLight("#8ea4c8", 0.22);
-  const hemi = new HemisphereLight("#c9d7ef", "#1a120c", 0.38);
+  // Éclaire la face de Mars que le vaisseau approche, pour ne pas foncer vers un disque noir.
+  const approachFill = new DirectionalLight("#ffe8d4", 1.35);
+  approachFill.position.set(0, 400, -2200);
+
+  const ambient = new AmbientLight("#c5d0e4", 0.48);
+  const hemi = new HemisphereLight("#e7eef8", "#2a211c", 0.45);
 
   const sunMesh = new Mesh(
     new SphereGeometry(46, 24, 16),
@@ -17,10 +21,11 @@ export function createLighting(scene) {
   sunMesh.position.copy(sun.position);
   sunMesh.frustumCulled = false;
 
-  scene.add(sun, sun.target, ambient, hemi, sunMesh);
+  scene.add(sun, sun.target, approachFill, approachFill.target, ambient, hemi, sunMesh);
 
   return {
     sun,
+    approachFill,
     ambient,
     hemi,
     sunMesh,

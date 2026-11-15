@@ -3,6 +3,7 @@ import { CameraManager } from "./scene/CameraManager.js";
 import { createLighting } from "./scene/Lighting.js";
 import { IntroUI } from "./ui/IntroUI.js";
 import { IntroController } from "./animations/IntroController.js";
+import { SpaceAudio } from "./audio/SpaceAudio.js";
 
 /**
  * Point d'entrée de l'introduction. À lancer depuis le client uniquement.
@@ -13,6 +14,10 @@ export function mountIntro(container, { onComplete } = {}) {
   const scenes = new SceneManager(ui.canvasHost);
   const cameraManager = new CameraManager(scenes.camera);
   const lighting = createLighting(scenes.scene);
+  const audio = new SpaceAudio();
+  const unlockAudio = () => audio.start();
+  window.addEventListener("pointerdown", unlockAudio);
+  window.addEventListener("keydown", unlockAudio);
   const controller = new IntroController({
     scene: scenes.scene,
     camera: scenes.camera,
@@ -35,6 +40,7 @@ export function mountIntro(container, { onComplete } = {}) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     controller.update(dt);
+    audio.setEngine(controller.ship.params.engine);
     if (controller.phase === "surface" && !surfaceReady) {
       surfaceReady = true;
       scenes.setSurfaceBackground(controller.mars.fog);
@@ -58,6 +64,7 @@ export function mountIntro(container, { onComplete } = {}) {
     .then((ok) => {
       if (!ok || !running) return;
       ui.hideLoader();
+      audio.start();
       controller.play();
       last = performance.now();
       frame = requestAnimationFrame(loop);
@@ -72,6 +79,9 @@ export function mountIntro(container, { onComplete } = {}) {
     running = false;
     cancelAnimationFrame(frame);
     window.removeEventListener("keydown", onKey);
+    window.removeEventListener("pointerdown", unlockAudio);
+    window.removeEventListener("keydown", unlockAudio);
+    audio.stop();
     controller.dispose();
     scenes.dispose();
     ui.dispose();
