@@ -21,7 +21,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AstroBase Academy — Junior Astronaut Mission Trainer",
+  title: "Orbite 3 — Junior Astronaut Mission Trainer",
   description:
     "Construis et gère une colonie lunaire ou martienne. Équilibre oxygène, énergie, nourriture et radiations — comme un vrai ingénieur de mission.",
 };

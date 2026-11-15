@@ -8,7 +8,7 @@ export default function PlayPage() {
           href="/"
           className="font-display text-sm font-semibold tracking-[0.22em] text-white uppercase"
         >
-          AstroBase
+          ORBITe 3
         </Link>
         <span className="font-mono text-[11px] tracking-wide text-nasa-grey uppercase">
           Mission en préparation

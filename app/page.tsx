@@ -9,7 +9,7 @@ export default function Home() {
 
       <header className="relative z-10 flex items-center justify-between px-6 py-5 sm:px-10">
         <p className="font-display text-sm font-semibold tracking-[0.22em] text-white/90 uppercase">
-          AstroBase
+          ORBITe 3
         </p>
         <p className="font-mono text-[11px] tracking-wide text-nasa-grey uppercase">
           Space Apps Challenge
@@ -22,7 +22,7 @@ export default function Home() {
         </p>
 
         <h1 className="animate-rise-delay-1 mt-4 font-display text-4xl leading-[1.05] font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
-          AstroBase Academy
+          ORBITe 3
         </h1>
 
         <p className="animate-rise-delay-2 mt-5 max-w-md text-lg leading-relaxed text-white/75 sm:text-xl">
